@@ -1,7 +1,8 @@
 /**
- * 服务监控器配置 v2.2
- * 服务按"系统"分组，每系统内含多个端口
- * 每个端口独立启停（如果支持），整体也有"启动/停止全部"
+ * 服务监控器配置 v2.3
+ * - OpenClaw: ports (18789) + subsystems (飞书 WebSocket)
+ * - Hermes: ports (9119/9120/8644)
+ * - Tailscale: subsystems (Windows + WSL)
  */
 const path = require('path');
 
@@ -13,21 +14,26 @@ module.exports = {
   tokenFile: path.join(__dirname, 'monitor.token'),
 
   services: {
-    // === OpenClaw (Windows, 双端口) ===
+    // === OpenClaw (单端口 + 飞书 WebSocket 子系统) ===
     openclaw: {
       label: 'OpenClaw',
       icon: '🤖',
       kind: 'local',
       ports: [
         { label: 'Gateway UI', port: 18789, url: 'http://127.0.0.1:18789/healthz', httpOkStatuses: [200] },
-        { label: '飞书集成', port: 18799, url: 'http://127.0.0.1:18799/', httpOkStatuses: [401, 403, 200, 301, 302] },
+      ],
+      subsystems: [
+        {
+          label: '飞书 WebSocket',
+          key: 'feishu-ws',
+          probe: { type: 'feishu-ws' },
+        },
       ],
       startCmd: 'node C:\\home\\lby10\\.npm-global\\node_modules\\openclaw\\dist\\index.js gateway --port 18789',
       stopCmd: 'powershell -Command "Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.MainModule.FileName -like \'*openclaw*\' } | Stop-Process -Force"',
     },
 
     // === Hermes (WSL, 三端口) ===
-    // 注意：9119 是 Gateway API + 微信集成 共用端口
     hermes: {
       label: 'Hermes (WSL)',
       icon: '⚡',
@@ -45,7 +51,7 @@ module.exports = {
       ],
     },
 
-    // === Tailscale (双系统：Windows + Linux/WSL) ===
+    // === Tailscale (双系统) ===
     tailscale: {
       label: 'Tailscale',
       icon: '🌐',
