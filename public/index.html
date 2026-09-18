@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nio Service Monitor v2.2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f1f5f9; color: #1e293b; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px 24px; background: white; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+  .header h1 { font-size: 22px; }
+  .header .meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .header .meta a { color: #3b82f6; text-decoration: none; font-family: monospace; }
+  .clock { font-family: monospace; font-size: 18px; color: #475569; }
+  .clock-label { font-size: 10px; color: #94a3b8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+  .card-title { font-size: 16px; font-weight: 600; color: #1e293b; margin-bottom: 6px; }
+  .card-status { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot-up { background: #10b981; box-shadow: 0 0 8px #10b981; animation: pulse 2s infinite; }
+  .dot-down { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+  .dot-unknown { background: #94a3b8; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .status-text-up { color: #059669; font-weight: 600; }
+  .status-text-down { color: #dc2626; font-weight: 600; }
+  .status-text-unknown { color: #64748b; }
+  .port-block, .sub-block { border-top: 1px solid #f1f5f9; padding: 10px 0; }
+  .port-block:first-of-type, .sub-block:first-of-type { border-top: none; padding-top: 4px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .info { flex: 1; min-width: 0; }
+  .label { color: #475569; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num { color: #94a3b8; font-size: 11px; font-family: monospace; margin-left: 4px; }
+  .status { font-family: monospace; font-size: 12px; margin-top: 2px; }
+  .status-ok { color: #059669; }
+  .status-fail { color: #dc2626; }
+  .status-unknown { color: #94a3b8; }
+  .ip-text { font-family: monospace; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .icon-btn { width: 28px; height: 28px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; }
+  .icon-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+  .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .icon-btn-start { background: #10b981; color: white; }
+  .icon-btn-start:hover:not(:disabled) { background: #059669; }
+  .icon-btn-stop { background: #ef4444; color: white; }
+  .icon-btn-stop:hover:not(:disabled) { background: #dc2626; }
+  .tooltip-wrap { position: relative; display: inline-block; cursor: help; }
+  .tooltip-wrap .tooltip-text {
+    visibility: hidden; opacity: 0;
+    background: #1e293b; color: #f1f5f9;
+    text-align: left; padding: 8px 10px; border-radius: 6px;
+    position: absolute; z-index: 100; bottom: 130%; left: 0;
+    white-space: pre; font-family: monospace; font-size: 11px; line-height: 1.6;
+    transition: opacity 0.15s; min-width: 240px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+  .tooltip-text .tt-label { color: #94a3b8; }
+  .card-actions { display: flex; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+  .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-start { background: #10b981; color: white; }
+  .btn-start:hover:not(:disabled) { background: #059669; }
+  .btn-stop { background: #ef4444; color: white; }
+  .btn-stop:hover:not(:disabled) { background: #dc2626; }
+  .meta-info { font-size: 11px; color: #94a3b8; margin-top: 8px; font-family: monospace; }
+  .history { background: white; border-radius: 12px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+  .history h2 { font-size: 15px; margin-bottom: 10px; color: #1e293b; }
+  .history-item { font-family: monospace; font-size: 11px; color: #475569; padding: 3px 0; border-bottom: 1px solid #f8fafc; }
+  .history-item:last-child { border-bottom: none; }
+  .history-time { color: #94a3b8; margin-right: 8px; }
+  .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 16px; }
+  .error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .login-form { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-width: 400px; margin: 100px auto; text-align: center; }
+  .login-form h2 { margin-bottom: 16px; }
+  .login-form input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+  .login-form button { width: 100%; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div id="login" class="login-form" style="display:none">
+  <h2>Nio Service Monitor</h2>
+  <p style="color:#64748b;margin-bottom:16px;font-size:13px">Please enter access token</p>
+  <input type="password" id="tokenInput" placeholder="Token" autocomplete="off">
+  <button onclick="setToken()">Login</button>
+</div>
+
+<div id="main" class="container" style="display:none">
+  <div class="header">
+    <div>
+      <h1>Nio Service Monitor v2.2</h1>
+      <div class="meta" id="serverInfo">Server: loading...</div>
+    </div>
+    <div style="text-align:right">
+      <div class="clock-label">Local time</div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </div>
+
+  <div id="error"></div>
+  <div id="services" class="grid">
+    <div class="card"><div class="card-title">Loading...</div></div>
+  </div>
+
+  <div class="history">
+    <h2>Recent Events</h2>
+    <div id="history"></div>
+  </div>
+
+  <div class="footer">
+    Auto refresh every 5s - Nio Service Monitor v2.2
+    <button onclick="logout()" style="margin-left:12px;background:#64748b;color:white;font-size:10px;padding:3px 8px;border:none;border-radius:4px;cursor:pointer">Logout</button>
+  </div>
+</div>
+
+<script>
+  var NIO_TOKEN = '__TOKEN__';
+  var AUTH_PREFIX = 'Bear' + 'er ';
+
+  function getToken() {
+    if (NIO_TOKEN && NIO_TOKEN !== '__TOKEN__') return NIO_TOKEN;
+    try { return sessionStorage.getItem('nio_monitor_token') || ''; } catch (e) { return ''; }
+  }
+  function setToken() {
+    var t = document.getElementById('tokenInput').value.trim();
+    if (!t) return alert('Token required');
+    try { sessionStorage.setItem('nio_monitor_token', t); } catch (e) {}
+    NIO_TOKEN = t;
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+    fetchStatus();
+  }
+  function logout() {
+    try { sessionStorage.removeItem('nio_monitor_token'); } catch (e) {}
+    NIO_TOKEN = '';
+    location.reload();
+  }
+
+  if (getToken()) {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+  } else {
+    document.getElementById('login').style.display = 'block';
+  }
+
+  function badge(ok) {
+    if (ok === true) return '<span class="dot dot-up"></span><span class="status-text-up">Running</span>';
+    if (ok === false) return '<span class="dot dot-down"></span><span class="status-text-down">Some stopped</span>';
+    return '<span class="dot dot-unknown"></span><span class="status-text-unknown">Checking</span>';
+  }
+  function fmtTime(iso) {
+    if (!iso) return '-';
+    return new Date(iso).toLocaleTimeString('en-GB');
+  }
+  function fmtDateTime(iso) {
+    if (!iso) return '-';
+    return new Date(iso).toLocaleString('en-GB');
+  }
+  function tooltipHtml(tt) {
+    if (!tt) return '';
+    return '<span class="tooltip-wrap">[i]<span class="tooltip-text"><span class="tt-label">Probe:</span>\n' + (tt.probeUrl || '-') + '\n<span class="tt-label">Meaning:</span>\n' + (tt.meaning || '-') + '\n<span class="tt-label">Latency:</span> ' + (tt.latencyMs != null ? tt.latencyMs : '-') + ' ms\n<span class="tt-label">Time:</span> ' + (tt.timestamp ? fmtDateTime(tt.timestamp) : '-') + '</span></span>';
+  }
+
+  function portBlockHtml(svcKey, portIdx, port, portData) {
+    var okClass = portData.ok === true ? 'status-ok' : (portData.ok === false ? 'status-fail' : 'status-unknown');
+    var icon = portData.ok === true ? '[OK]' : (portData.ok === false ? '[X]' : '[?]');
+    var tooltip = tooltipHtml(portData.tooltip);
+    var startDisabled = portData.ok === true ? 'disabled' : '';
+    var stopDisabled = portData.ok === false ? 'disabled' : '';
+
+    return '<div class="port-block">' +
+      '<div class="row">' +
+        '<div class="info">' +
+          '<div class="label">' + port.label + ' <span class="num">:' + port.port + '</span></div>' +
+          '<div class="status ' + okClass + '">' + icon + ' ' + (portData.detail || '') + ' ' + tooltip + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="icon-btn icon-btn-start" ' + startDisabled + ' title="Start ' + port.label + '" onclick="actPort(\'' + svcKey + '\',' + portIdx + ',\'start\')">&gt;</button>' +
+          '<button class="icon-btn icon-btn-stop" ' + stopDisabled + ' title="Stop ' + port.label + '" onclick="actPort(\'' + svcKey + '\',' + portIdx + ',\'stop\')">X</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function subBlockHtml(svcKey, subIdx, sub, subData) {
+    var okClass = subData.ok === true ? 'status-ok' : (subData.ok === false ? 'status-fail' : 'status-unknown');
+    var icon = subData.ok === true ? '[OK]' : (subData.ok === false ? '[X]' : '[?]');
+    var tooltip = tooltipHtml(subData.tooltip);
+    var startDisabled = subData.ok === true ? 'disabled' : '';
+    var stopDisabled = subData.ok === false ? 'disabled' : '';
+    var ipHtml = subData.ip ? '<div class="ip-text">IP: ' + subData.ip + '</div>' : '';
+
+    return '<div class="sub-block">' +
+      '<div class="row">' +
+        '<div class="info">' +
+          '<div class="label">[' + (sub.label || '') + ']</div>' +
+          '<div class="status ' + okClass + '">' + icon + ' ' + (subData.detail || '') + ' ' + tooltip + '</div>' +
+          ipHtml +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="icon-btn icon-btn-start" ' + startDisabled + ' title="Start ' + sub.label + '" onclick="actSub(\'' + svcKey + '\',' + subIdx + ',\'start\')">&gt;</button>' +
+          '<button class="icon-btn icon-btn-stop" ' + stopDisabled + ' title="Stop ' + sub.label + '" onclick="actSub(\'' + svcKey + '\',' + subIdx + ',\'stop\')">X</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function serviceCardHtml(key, svc) {
+    var label = svc.label || key;
+    var startAllDisabled = svc.ok === true ? 'disabled' : '';
+    var stopAllDisabled = svc.ok === false ? 'disabled' : '';
+
+    var bodyHtml = '';
+    if (svc.ports && svc.ports.length > 0) {
+      svc.ports.forEach(function(p, i) {
+        bodyHtml += portBlockHtml(key, i, p, svc.ports[i]);
+      });
+    }
+    if (svc.subsystems && svc.subsystems.length > 0) {
+      svc.subsystems.forEach(function(sub, i) {
+        bodyHtml += subBlockHtml(key, i, sub, svc.subsystems[i]);
+      });
+    }
+
+    var lastCheck = svc.lastCheck ? 'Last check: ' + fmtDateTime(svc.lastCheck) : '';
+
+    return '<div class="card">' +
+      '<div class="card-title">' + label + '</div>' +
+      '<div class="card-status">' + badge(svc.ok) + (svc.detail ? ' <span style="color:#64748b;font-size:11px">- ' + svc.detail + '</span>' : '') + '</div>' +
+      bodyHtml +
+      '<div class="meta-info">' + lastCheck + (svc.latencyMs != null ? ' - ' + svc.latencyMs + 'ms' : '') + '</div>' +
+      '<div class="card-actions">' +
+        '<button class="btn btn-start" ' + startAllDisabled + ' onclick="act(\'' + key + '\',\'start\')">Start All</button>' +
+        '<button class="btn btn-stop" ' + stopAllDisabled + ' onclick="act(\'' + key + '\',\'stop\')">Stop All</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  async function fetchStatus() {
+    if (!NIO_TOKEN) return;
+    try {
+      var r = await fetch('/api/status', { headers: { Authorization: AUTH_PREFIX + NIO_TOKEN } });
+      if (r.status === 401) {
+        document.getElementById('error').innerHTML = '<div class="error">Token error</div>';
+        logout();
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var data = await r.json();
+      render(data);
+      document.getElementById('error').innerHTML = '';
+    } catch (e) {
+      document.getElementById('error').innerHTML = '<div class="error">' + e.message + '</div>';
+    }
+  }
+
+  function render(data) {
+    var startedAt = new Date(data.startedAt);
+    var listenInfo = '';
+    if (data.listenIps && data.listenIps.length) {
+      listenInfo = ' - Listen: ' + data.listenIps.map(function(ip) {
+        return '<a href="http://' + ip + ':' + (location.port || 18888) + '/" target="_blank">' + ip + '</a>';
+      }).join(', ');
+    }
+    document.getElementById('serverInfo').innerHTML =
+      'Server: Kevin - Started ' + startedAt.toLocaleString('en-GB') + listenInfo;
+
+    var cards = Object.entries(data.services).map(function(e) {
+      return serviceCardHtml(e[0], e[1]);
+    }).join('');
+    document.getElementById('services').innerHTML = cards;
+
+    var histHtml = data.history.length === 0
+      ? '<div class="history-item">No events</div>'
+      : data.history.map(function(h) {
+          return '<div class="history-item"><span class="history-time">' + fmtTime(h.ts) + '</span>' + h.msg + '</div>';
+        }).join('');
+    document.getElementById('history').innerHTML = histHtml;
+  }
+
+  async function act(svcKey, action) {
+    try {
+      var r = await fetch('/api/' + svcKey + '/' + action, {
+        method: 'POST',
+        headers: { Authorization: AUTH_PREFIX + NIO_TOKEN },
+      });
+      var data = await r.json();
+      alert(action + ' ' + svcKey + ': ' + (data.ok ? 'OK' : 'FAIL') + ' ' + (data.error || data.note || ''));
+      setTimeout(fetchStatus, 2000);
+    } catch (e) {
+      alert('Request failed: ' + e.message);
+    }
+  }
+
+  async function actPort(svcKey, portIdx, action) {
+    try {
+      var r = await fetch('/api/' + svcKey + '/port/' + portIdx + '/' + action, {
+        method: 'POST',
+        headers: { Authorization: AUTH_PREFIX + NIO_TOKEN },
+      });
+      var data = await r.json();
+      alert(action + ' ' + svcKey + ' port ' + portIdx + ': ' + (data.ok ? 'OK' : 'FAIL') + ' ' + (data.error || data.note || ''));
+      setTimeout(fetchStatus, 2000);
+    } catch (e) {
+      alert('Request failed: ' + e.message);
+    }
+  }
+
+  async function actSub(svcKey, subIdx, action) {
+    try {
+      var r = await fetch('/api/' + svcKey + '/sub/' + subIdx + '/' + action, {
+        method: 'POST',
+        headers: { Authorization: AUTH_PREFIX + NIO_TOKEN },
+      });
+      var data = await r.json();
+      alert(action + ' ' + svcKey + ' sub ' + subIdx + ': ' + (data.ok ? 'OK' : 'FAIL') + ' ' + (data.error || data.note || ''));
+      setTimeout(fetchStatus, 2000);
+    } catch (e) {
+      alert('Request failed: ' + e.message);
+    }
+  }
+
+  setInterval(function() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB');
+  }, 1000);
+
+  if (getToken()) {
+    fetchStatus();
+    setInterval(fetchStatus, 5000);
+  }
+</script>
+</body>
+</html>

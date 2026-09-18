@@ -1,0 +1,34 @@
+# Sensitive - DO NOT upload
+monitor.token
+*.key
+*.pem
+*.p12
+*.pfx
+.env
+.env.local
+.env.*
+secrets.json
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp
+*.bak
+*.log
+*.pid
+
+# OpenClaw runtime
+.openclaw/
+.openclaw-*/
+nio-install.log
+
+# Monitor runtime
+monitor.token
+*.pid

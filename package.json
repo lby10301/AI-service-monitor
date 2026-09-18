@@ -1,0 +1,12 @@
+{
+  "name": "service-monitor",
+  "version": "1.0.0",
+  "description": "智能体运行状态监控器 - OpenClaw/Hermes/Tailscale 一站式看板",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
