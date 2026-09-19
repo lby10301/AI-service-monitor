@@ -1,11 +1,26 @@
 {
-  "name": "service-monitor",
-  "version": "1.0.0",
-  "description": "智能体运行状态监控器 - OpenClaw/Hermes/Tailscale 一站式看板",
+  "name": "nio-service-monitor",
+  "version": "2.0.0",
+  "description": "Nio Service Monitor v2.0 - 独立服务监控平台 (OpenClaw/Hermes/Tailscale)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "monitor",
+    "service",
+    "openclaw",
+    "hermes",
+    "tailscale",
+    "dashboard",
+    "healthcheck"
+  ],
+  "author": "Nio <nio@local>",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.19.2"
   }

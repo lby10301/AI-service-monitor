@@ -1,12 +1,23 @@
 /**
- * 服务监控器配置 v2.3
- * - OpenClaw: ports (18789) + subsystems (飞书 WebSocket)
- * - Hermes: ports (9119/9120/8644)
- * - Tailscale: subsystems (Windows + WSL)
+ * Nio Service Monitor v2.0 - Configuration
+ *
+ * Service definitions for monitoring.
+ * Each service has either ports[] (HTTP probes) or subsystems[] (multi-process).
+ *
+ * Paths use env vars where possible (NIO_OPENCLAW_HOME) so the monitor is
+ * portable across machines without code changes.
  */
+'use strict';
+
 const path = require('path');
+const os = require('os');
+
+// ---- Paths (可被环境变量覆盖) ----
+const OPENCLAW_HOME = process.env.NIO_OPENCLAW_HOME
+  || path.join(os.homedir(), '.npm-global', 'node_modules', 'openclaw');
 
 module.exports = {
+  version: '2.0.0',
   port: 18888,
   probeIntervalSec: 5,
   cmdTimeoutMs: 30000,
@@ -14,55 +25,81 @@ module.exports = {
   tokenFile: path.join(__dirname, 'monitor.token'),
 
   services: {
-    // === OpenClaw (单端口 + 飞书 WebSocket 子系统) ===
+    // === OpenClaw: HTTP gateway + Feishu WebSocket subsystem ===
     openclaw: {
       label: 'OpenClaw',
-      icon: '🤖',
+      icon: 'robot',
       kind: 'local',
       ports: [
-        { label: 'Gateway UI', port: 18789, url: 'http://127.0.0.1:18789/healthz', httpOkStatuses: [200] },
+        {
+          label: 'Gateway UI',
+          port: 18789,
+          url: 'http://127.0.0.1:18789/healthz',
+          httpOkStatuses: [200],
+        },
       ],
       subsystems: [
         {
-          label: '飞书 WebSocket',
+          label: 'Feishu WebSocket',
           key: 'feishu-ws',
           probe: { type: 'feishu-ws' },
         },
       ],
-      startCmd: 'node C:\\home\\lby10\\.npm-global\\node_modules\\openclaw\\dist\\index.js gateway --port 18789',
+      startCmd: 'node "' + OPENCLAW_HOME + '\\dist\\index.js" gateway --port 18789',
       stopCmd: 'powershell -Command "Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.MainModule.FileName -like \'*openclaw*\' } | Stop-Process -Force"',
     },
 
     // === Hermes (WSL, 三端口) ===
     hermes: {
       label: 'Hermes (WSL)',
-      icon: '⚡',
+      icon: 'bolt',
       kind: 'wsl',
       ports: [
-        { label: 'Gateway API + 微信集成', port: 9119, url: 'http://127.0.0.1:9119/', httpOkStatuses: [200, 301, 302, 401, 403, 404],
+        {
+          label: 'Gateway API + WeChat',
+          port: 9119,
+          url: 'http://127.0.0.1:9119/',
+          httpOkStatuses: [200, 301, 302, 401, 403, 404],
           startCmd: 'wsl -d Ubuntu -- bash -c "hermes serve --host 0.0.0.0 --port 9119"',
-          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes serve\' || true"' },
-        { label: 'Dashboard', port: 9120, url: 'http://127.0.0.1:9120/', httpOkStatuses: [200, 301, 302, 401, 403, 404],
+          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes serve\' || true"',
+        },
+        {
+          label: 'Dashboard',
+          port: 9120,
+          url: 'http://127.0.0.1:9120/',
+          httpOkStatuses: [200, 301, 302, 401, 403, 404],
           startCmd: 'wsl -d Ubuntu -- bash -c "hermes dashboard --host 0.0.0.0 --port 9120"',
-          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes dashboard\' || true"' },
-        { label: '飞书集成', port: 8644, url: 'http://127.0.0.1:8644/', httpOkStatuses: [200, 301, 302, 401, 403, 404],
+          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes dashboard\' || true"',
+        },
+        {
+          label: 'Feishu Integration',
+          port: 8644,
+          url: 'http://127.0.0.1:8644/',
+          httpOkStatuses: [200, 301, 302, 401, 403, 404],
           startCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes gateway run\' 2>/dev/null; sleep 1; nohup hermes gateway run > /tmp/hermes-feishu.log 2>&1 &"',
-          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes gateway run\' || true"' },
+          stopCmd: 'wsl -d Ubuntu -- bash -c "pkill -f \'hermes gateway run\' || true"',
+        },
       ],
     },
 
-    // === Tailscale (双系统) ===
+    // === Tailscale (Windows + WSL) ===
     tailscale: {
       label: 'Tailscale',
-      icon: '🌐',
+      icon: 'globe',
       kind: 'multi',
       subsystems: [
-        { label: 'Windows', icon: '🪟', key: 'tailscale-windows',
+        {
+          label: 'Windows',
+          icon: 'windows',
+          key: 'tailscale-windows',
           probe: { type: 'cli', cmd: 'tailscale status', timeoutMs: 5000 },
           startCmd: 'tailscale up --accept-routes',
           stopCmd: 'tailscale down',
         },
-        { label: 'Linux/WSL', icon: '🐧', key: 'tailscale-wsl',
+        {
+          label: 'Linux/WSL',
+          icon: 'linux',
+          key: 'tailscale-wsl',
           probe: { type: 'wsl-cli', distro: 'Ubuntu', cmd: 'tailscale status', timeoutMs: 8000 },
           startCmd: 'wsl -d Ubuntu -- bash -c "tailscale up --accept-routes"',
           stopCmd: 'wsl -d Ubuntu -- bash -c "tailscale down"',
